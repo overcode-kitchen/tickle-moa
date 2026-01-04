@@ -10,8 +10,7 @@ export default function Home() {
   ]
 
   return (
-    <main className="min-h-screen bg-coolgray-25">
-      {/* 상단 헤더 */}
+    <main className="min-h-screen bg-coolgray-25">      {/* 상단 헤더 */}
       <header className="h-[52px] flex items-center justify-between px-4">
         <h1 className="font-bold text-coolgray-900 text-xl">
           티끌모아 태산
@@ -21,7 +20,7 @@ export default function Home() {
         </button>
       </header>
 
-      <div className="max-w-md mx-auto px-4 py-4 space-y-6">
+      <div className="max-w-md mx-auto px-4 py-4 space-y-3">
         {/* 상단 요약 카드 */}
         <div className="bg-white rounded-3xl shadow-md p-8">
           <h2 className="text-lg font-bold text-coolgray-900 mb-6">
