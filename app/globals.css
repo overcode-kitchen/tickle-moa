@@ -1,3 +1,4 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard-dynamic-subset.min.css");
 @import "tailwindcss";
 @import "tw-animate-css";
 
@@ -37,6 +38,33 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+  
+  /* Brand Colors */
+  --color-brand-50: #e6f9ef;
+  --color-brand-100: #b1edcf;
+  --color-brand-200: #8be4b7;
+  --color-brand-300: #55d796;
+  --color-brand-400: #35d082;
+  --color-brand-500: #02c463;
+  --color-brand-600: #02b25a;
+  --color-brand-700: #018b46;
+  --color-brand-800: #016c36;
+  --color-brand-900: #01522a;
+  
+  /* Cool Gray Colors */
+  --color-coolgray-25: #EDEFF0;
+  --color-coolgray-50: #E6E7E8;
+  --color-coolgray-75: #D7D8D9;
+  --color-coolgray-100: #CECFD1;
+  --color-coolgray-200: #B7B9BD;
+  --color-coolgray-300: #9C9EA6;
+  --color-coolgray-400: #83868F;
+  --color-coolgray-500: #70737C;
+  --color-coolgray-600: #63666E;
+  --color-coolgray-700: #4D4E54;
+  --color-coolgray-800: #37383D;
+  --color-coolgray-900: #292A2E;
+  
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -120,6 +148,6 @@
     @apply border-border outline-ring/50;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground font-sans;
   }
 }

@@ -1,5 +1,7 @@
 'use client'
 
+import { Plus } from 'lucide-react'
+
 export default function Home() {
   const mockItems = [
     { id: 1, title: 'S&P500', amount: '10만', period: '3년', expected: '5천' },
@@ -9,26 +11,40 @@ export default function Home() {
 
   return (
     <main className="min-h-screen bg-coolgray-25">
-      <div className="max-w-md mx-auto px-4 py-8 space-y-8">
+      <div className="max-w-md mx-auto px-4 py-4 space-y-6">
+        {/* 상단 헤더 */}
+        <h1 className="text-center font-bold text-coolgray-900 py-4 text-xl">
+          티끌모아 태산
+        </h1>
+
         {/* 상단 요약 카드 */}
-        <div className="bg-white rounded-3xl shadow-lg p-8">
-          <div className="space-y-4">
-            <p className="text-coolgray-900 text-lg leading-relaxed">
-              사장님, 모든 계획이 성공하면 5년 뒤{' '}
-              <span className="text-brand-600 text-4xl font-bold">3.2억</span>이 생겨요!
-            </p>
-            <p className="text-coolgray-500 text-sm">
-              현재 월 투자금 합계: 45만 원
-            </p>
+        <div className="bg-white rounded-3xl shadow-md p-8">
+          <div className="space-y-6">
+            {/* Header */}
+            <div className="text-coolgray-700 text-lg font-medium">
+              5년 뒤 예상 자산
+            </div>
+            
+            {/* Main */}
+            <div className="text-coolgray-900 text-3xl font-bold leading-tight">
+              3억 2,000만 원
+            </div>
+            
+            {/* Footer */}
+            <div className="text-coolgray-700 text-lg font-medium">
+            매월 <span className="text-brand-600 font-semibold">45만 원</span>씩 모으고 있어요
+            </div>
           </div>
         </div>
 
-        {/* 하단 리스트 */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-bold text-coolgray-900 px-2">
-            투자할 목록 추가하기
-          </h2>
-          
+        {/* 투자 목록 추가하기 버튼 */}
+        <button className="w-full bg-brand-600 text-white font-bold rounded-2xl py-4 shadow-lg flex items-center justify-center gap-2 hover:bg-brand-700 transition-colors">
+          <Plus className="w-5 h-5" />
+          투자 목록 추가하기
+        </button>
+
+        {/* 하단 리스트 카드 */}
+        <div className="bg-white rounded-3xl p-6 shadow-sm">
           <div className="space-y-1">
             {mockItems.map((item) => (
               <div
