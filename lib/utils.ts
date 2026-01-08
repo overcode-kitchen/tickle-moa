@@ -6,20 +6,21 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * 금액을 만원 단위로 포맷팅하는 함수
+ * 금액을 억/만 단위로 포맷팅하는 함수
  * @param amount - 원 단위 금액 (number) 또는 만원 단위 금액 (string)
- * @returns "XX,XXX만원" 형식의 문자열
+ * @returns "X.X억" 또는 "XX만원" 형식의 문자열
  */
 export function formatCurrency(amount: number | string): string {
-  const numAmount = typeof amount === 'string' ? parseFloat(amount) : amount
+  const num = typeof amount === 'string' ? parseFloat(amount) : amount
   
-  if (isNaN(numAmount) || numAmount === 0) {
-    return '0만원'
+  if (isNaN(num) || num === 0) {
+    return '0원'
   }
   
-  // 만원 단위로 변환 (예: 150000 -> 15만원, 1500000 -> 150만원)
-  const manWon = numAmount / 10000
-  
-  // 천 단위 구분 기호 추가
-  return `${manWon.toLocaleString('ko-KR')}만원`
+  if (num >= 100000000) {
+    return `${(num / 100000000).toFixed(1)}억`
+  } else if (num >= 10000) {
+    return `${(num / 10000).toFixed(0)}만원`
+  }
+  return `${num.toLocaleString()}원`
 }

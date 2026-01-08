@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
 import { IconPlus, IconLogout, IconUser, IconLoader2 } from '@tabler/icons-react'
@@ -24,6 +24,46 @@ export default function Home() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const supabase = createClient()
+
+  // 복리 계산 헬퍼 함수: 월 적립액을 N년 동안 연이율 10%로 굴린 총액
+  const calculateCompoundValue = (monthlyAmount: number, years: number): number => {
+    const annualRate = 0.10 // 연이율 10%
+    const monthlyRate = annualRate / 12 // 월이율
+    const totalMonths = years * 12 // 총 개월 수
+    
+    // 복리 공식: FV = PMT × [(1 + r)^n - 1] / r
+    const futureValue = monthlyAmount * ((Math.pow(1 + monthlyRate, totalMonths) - 1) / monthlyRate)
+    
+    return futureValue
+  }
+
+  // N년 기준 자산 계산
+  const { minYear, totalExpectedAsset, monthlyEffectiveAmount } = useMemo(() => {
+    if (records.length === 0) {
+      return {
+        minYear: 3,
+        totalExpectedAsset: 0,
+        monthlyEffectiveAmount: 0
+      }
+    }
+
+    // 1. 가장 짧은 투자 기간 찾기
+    const minYear = Math.min(...records.map(r => r.period_years))
+
+    // 2. 모든 투자를 minYear 기준으로 재계산하여 합산
+    const totalExpectedAsset = records.reduce((sum, record) => {
+      return sum + calculateCompoundValue(record.monthly_amount, minYear)
+    }, 0)
+
+    // 3. 매월 실제로 불어나는 금액 (이자 포함)
+    const monthlyEffectiveAmount = totalExpectedAsset / (minYear * 12)
+
+    return {
+      minYear,
+      totalExpectedAsset,
+      monthlyEffectiveAmount
+    }
+  }, [records])
 
   useEffect(() => {
     // 인증 상태 확인 및 데이터 로드
@@ -200,15 +240,13 @@ export default function Home() {
           <div className="space-y-6">
             {/* Header */}
             <div className="text-coolgray-700 text-lg font-medium">
-              5년 뒤 예상 자산
+              {minYear}년 뒤 예상 자산
             </div>
             
             {/* Main */}
             <div className="text-coolgray-900 text-3xl font-bold leading-tight">
               {user && records.length > 0
-                ? formatCurrency(
-                    records.reduce((sum, record) => sum + parseFloat(record.expected_amount), 0)
-                  )
+                ? formatCurrency(totalExpectedAsset)
                 : '0만원'}
             </div>
             
@@ -217,9 +255,7 @@ export default function Home() {
               매월{' '}
               <span className="text-brand-600 font-semibold">
                 {user && records.length > 0
-                  ? formatCurrency(
-                      records.reduce((sum, record) => sum + record.monthly_amount, 0)
-                    )
+                  ? formatCurrency(monthlyEffectiveAmount)
                   : '0만원'}
               </span>
               씩 모으고 있어요
@@ -245,10 +281,14 @@ export default function Home() {
               </h2>
               <div className="space-y-1">
                 {records.map((item) => {
-                  // 수익금 계산: 예상 금액 - 투자 원금 (월 투자액 * 12 * 기간)
-                  const expectedAmount = parseFloat(item.expected_amount)
-                  const totalInvested = item.monthly_amount * 12 * item.period_years
-                  const profit = expectedAmount - totalInvested
+                  // 실시간 미래 가치 계산 (복리 적용)
+                  const calculatedFutureValue = calculateCompoundValue(item.monthly_amount, item.period_years)
+                  
+                  // 총 원금 계산
+                  const totalPrincipal = item.monthly_amount * 12 * item.period_years
+                  
+                  // 수익금 계산 (미래 가치 - 원금)
+                  const calculatedProfit = calculatedFutureValue - totalPrincipal
                   
                   return (
                     <div
@@ -271,11 +311,11 @@ export default function Home() {
                       <div className="flex flex-col items-end">
                         {/* 최종 예상 금액 */}
                         <div className="text-xl font-bold text-coolgray-900 mb-1">
-                          {formatCurrency(item.expected_amount)}
+                          {formatCurrency(calculatedFutureValue)}
                         </div>
                         {/* 수익금 배지 */}
                         <div className="bg-[#E0F8E8] text-green-600 rounded-full px-3 py-0.5 text-sm font-medium">
-                          + {formatCurrency(profit)}
+                          + {formatCurrency(calculatedProfit)}
                         </div>
                       </div>
                     </div>
