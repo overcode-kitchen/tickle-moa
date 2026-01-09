@@ -56,6 +56,11 @@ export default function AddInvestmentPage() {
 
   // 주식 검색 (Debounce 적용)
   useEffect(() => {
+    // 선택된 종목이 있으면 검색하지 않음
+    if (selectedStock) {
+      return
+    }
+
     // 입력이 없거나 너무 짧으면 검색하지 않음
     if (!stockName.trim() || stockName.trim().length < 2) {
       setSearchResults([])
@@ -91,11 +96,16 @@ export default function AddInvestmentPage() {
 
     // Cleanup: 컴포넌트 unmount 또는 stockName 변경 시 타이머 제거
     return () => clearTimeout(timer)
-  }, [stockName])
+  }, [stockName, selectedStock])
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      // 드롭다운 영역이나 입력 필드 내부 클릭은 무시
+      if (target.closest('.stock-search-container')) {
+        return
+      }
       setShowDropdown(false)
     }
 
@@ -226,13 +236,14 @@ export default function AddInvestmentPage() {
         {/* 입력 폼 */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           {/* 종목명 입력 (검색 기능 포함) */}
-          <div className="relative">
+          <div className="relative stock-search-container">
             <input
               type="text"
               value={stockName}
               onChange={(e) => {
                 setStockName(e.target.value)
                 setSelectedStock(null) // 입력 변경 시 선택 초기화
+                setAnnualRate(10) // 기본값으로 리셋
               }}
               placeholder="S&P 500"
               className="w-full bg-white rounded-2xl p-5 pr-12 text-coolgray-900 placeholder-coolgray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -253,7 +264,10 @@ export default function AddInvestmentPage() {
                   <button
                     key={stock.symbol}
                     type="button"
-                    onClick={() => handleSelectStock(stock)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSelectStock(stock)
+                    }}
                     className="w-full px-5 py-4 text-left hover:bg-coolgray-50 transition-colors border-b border-coolgray-100 last:border-b-0"
                   >
                     <div className="font-medium text-coolgray-900">
