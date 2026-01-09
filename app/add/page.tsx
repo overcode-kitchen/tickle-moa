@@ -4,8 +4,18 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { IconArrowLeft, IconLoader2 } from '@tabler/icons-react'
 import { createClient } from '@/utils/supabase/client'
+import { sendGAEvent } from '@next/third-parties/google'
 
-interface StockSearchResult {
+// 검색 결과 (간단한 정보만)
+// 커밋테스트
+interface SearchResult {
+  symbol: string
+  name: string
+  group?: string
+}
+
+// 선택된 종목의 상세 정보
+interface StockDetail {
   symbol: string
   name: string
   averageRate: number
@@ -22,10 +32,21 @@ export default function AddInvestmentPage() {
   
   // 주식 검색 관련 상태
   const [isSearching, setIsSearching] = useState(false)
-  const [searchResults, setSearchResults] = useState<StockSearchResult[]>([])
+  const [searchResults, setSearchResults] = useState<SearchResult[]>([])
   const [showDropdown, setShowDropdown] = useState(false)
-  const [selectedStock, setSelectedStock] = useState<StockSearchResult | null>(null)
+  const [selectedStock, setSelectedStock] = useState<StockDetail | null>(null)
   const [annualRate, setAnnualRate] = useState(10) // 기본 10%
+
+  // 체류 시간 추적
+  useEffect(() => {
+    const startTime = Date.now()
+
+    return () => {
+      const endTime = Date.now()
+      const timeSpent = Math.round((endTime - startTime) / 1000) // 초 단위로 변환
+      sendGAEvent('event', 'time_spent_add_page', { value: timeSpent })
+    }
+  }, [])
 
   useEffect(() => {
     // 로그인한 유저 정보 가져오기
@@ -44,10 +65,20 @@ export default function AddInvestmentPage() {
 
   // 주식 검색 (Debounce 적용)
   useEffect(() => {
+    // 선택된 종목이 있으면 검색하지 않음
+    if (selectedStock) {
+      return
+    }
+
     // 입력이 없거나 너무 짧으면 검색하지 않음
     if (!stockName.trim() || stockName.trim().length < 2) {
       setSearchResults([])
       setShowDropdown(false)
+      return
+    }
+
+    // 이미 종목이 선택된 상태면 검색하지 않음 (드롭다운 재오픈 방지)
+    if (selectedStock && stockName === selectedStock.name) {
       return
     }
 
@@ -57,12 +88,12 @@ export default function AddInvestmentPage() {
         setIsSearching(true)
         setShowDropdown(false)
         
-        const response = await fetch(`/api/stock?query=${encodeURIComponent(stockName.trim())}`)
+        // 새로운 Search API 호출 (빠른 DB 조회만)
+        const response = await fetch(`/api/search?query=${encodeURIComponent(stockName.trim())}`)
         const data = await response.json()
         
-        if (response.ok && data.symbol) {
-          // 단일 결과를 배열로 변환
-          setSearchResults([data])
+        if (response.ok && data.stocks && data.stocks.length > 0) {
+          setSearchResults(data.stocks)
           setShowDropdown(true)
         } else {
           setSearchResults([])
@@ -79,11 +110,16 @@ export default function AddInvestmentPage() {
 
     // Cleanup: 컴포넌트 unmount 또는 stockName 변경 시 타이머 제거
     return () => clearTimeout(timer)
-  }, [stockName])
+  }, [stockName, selectedStock])
 
   // 외부 클릭 시 드롭다운 닫기
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement
+      // 드롭다운 영역이나 입력 필드 내부 클릭은 무시
+      if (target.closest('.stock-search-container')) {
+        return
+      }
       setShowDropdown(false)
     }
 
@@ -107,12 +143,41 @@ export default function AddInvestmentPage() {
     return Math.round(finalAmount)
   }
 
-  // 종목 선택 핸들러
-  const handleSelectStock = (stock: StockSearchResult) => {
-    setStockName(stock.name)
-    setSelectedStock(stock)
-    setAnnualRate(stock.averageRate)
-    setShowDropdown(false)
+  // 종목 선택 핸들러 (상세 정보 조회)
+  const handleSelectStock = async (stock: SearchResult) => {
+    try {
+      // 드롭다운 닫고 임시 선택 상태 설정 (검색 재실행 방지)
+      setShowDropdown(false)
+      setSelectedStock({
+        symbol: stock.symbol,
+        name: stock.name,
+        averageRate: 0,
+        currentPrice: 0
+      })
+      setStockName(stock.name)
+      setIsSearching(true)
+
+      // Stock API 호출하여 상세 정보 조회 (Yahoo Finance 데이터)
+      const response = await fetch(`/api/stock?symbol=${encodeURIComponent(stock.symbol)}`)
+      const data = await response.json()
+
+      if (response.ok && data.averageRate) {
+        // 실제 상세 정보로 업데이트
+        setSelectedStock(data)
+        setAnnualRate(data.averageRate)
+      } else {
+        // 상세 정보 조회 실패 시 기본값 사용
+        console.warn('상세 정보 조회 실패, 기본값 사용')
+        setSelectedStock(null)
+        setAnnualRate(10)
+      }
+    } catch (error) {
+      console.error('상세 정보 조회 오류:', error)
+      setSelectedStock(null)
+      setAnnualRate(10)
+    } finally {
+      setIsSearching(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -164,6 +229,9 @@ export default function AddInvestmentPage() {
         return
       }
 
+      // 저장 완료 이벤트 전송
+      sendGAEvent('event', 'click_add_investment_complete')
+
       // 성공 시 메인으로 이동
       router.refresh()
       router.push('/')
@@ -211,13 +279,14 @@ export default function AddInvestmentPage() {
         {/* 입력 폼 */}
         <form onSubmit={handleSubmit} className="space-y-4 mb-8">
           {/* 종목명 입력 (검색 기능 포함) */}
-          <div className="relative">
+          <div className="relative stock-search-container">
             <input
               type="text"
               value={stockName}
               onChange={(e) => {
                 setStockName(e.target.value)
                 setSelectedStock(null) // 입력 변경 시 선택 초기화
+                setAnnualRate(10) // 기본값으로 리셋
               }}
               placeholder="S&P 500"
               className="w-full bg-white rounded-2xl p-5 pr-12 text-coolgray-900 placeholder-coolgray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
@@ -233,19 +302,23 @@ export default function AddInvestmentPage() {
 
             {/* 드롭다운 검색 결과 */}
             {showDropdown && searchResults.length > 0 && (
-              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-lg border border-coolgray-100 overflow-hidden z-10">
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-lg border border-coolgray-100 overflow-hidden z-10 max-h-80 overflow-y-auto">
                 {searchResults.map((stock) => (
                   <button
                     key={stock.symbol}
                     type="button"
-                    onClick={() => handleSelectStock(stock)}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      handleSelectStock(stock)
+                    }}
                     className="w-full px-5 py-4 text-left hover:bg-coolgray-50 transition-colors border-b border-coolgray-100 last:border-b-0"
                   >
                     <div className="font-medium text-coolgray-900">
                       {stock.name}
                     </div>
                     <div className="text-sm text-coolgray-500 mt-1">
-                      {stock.symbol} · 연평균 {stock.averageRate}%
+                      {stock.symbol}
+                      {stock.group && ` · ${stock.group}`}
                     </div>
                   </button>
                 ))}
