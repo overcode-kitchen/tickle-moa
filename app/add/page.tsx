@@ -202,18 +202,19 @@ export default function AddInvestmentPage() {
       setIsSubmitting(true)
 
       const supabase = createClient()
-      const monthlyAmountNum = parseInt(monthlyAmount)
+      // 콤마 제거 후 숫자로 변환하고 만원 단위로 처리 (원 단위로 변환)
+      const monthlyAmountInWon = parseInt(monthlyAmount.replace(/,/g, '')) * 10000
       const periodYearsNum = parseInt(period)
       // 검색으로 선택한 수익률 또는 기본값(10%) 사용
-      const finalAmount = calculateFinalAmount(monthlyAmountNum, periodYearsNum, annualRate)
+      const finalAmount = calculateFinalAmount(monthlyAmountInWon, periodYearsNum, annualRate)
 
-      // Supabase에 데이터 저장
+      // Supabase에 데이터 저장 (만원 단위를 원 단위로 변환하여 저장)
       const { error } = await supabase
         .from('records')
         .insert({
           user_id: userId,
           title: stockName.trim(),
-          monthly_amount: monthlyAmountNum,
+          monthly_amount: monthlyAmountInWon,
           period_years: periodYearsNum,
           annual_rate: annualRate, // 실제 조회된 수익률 저장
           final_amount: finalAmount,
@@ -239,13 +240,28 @@ export default function AddInvestmentPage() {
     }
   }
 
-  // 숫자만 입력받는 핸들러
+  // 숫자만 입력받는 핸들러 (기간용)
   const handleNumericInput = (
     e: React.ChangeEvent<HTMLInputElement>,
     setter: (value: string) => void
   ) => {
     const value = e.target.value.replace(/[^0-9]/g, '')
     setter(value)
+  }
+
+  // 금액 입력 핸들러 (천 단위 콤마 포맷팅)
+  const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // 숫자만 추출
+    const value = e.target.value.replace(/[^0-9]/g, '')
+    
+    if (value === '') {
+      setMonthlyAmount('')
+      return
+    }
+
+    // 천 단위 콤마 추가
+    const formatted = parseInt(value).toLocaleString('ko-KR')
+    setMonthlyAmount(formatted)
   }
 
   return (
@@ -338,14 +354,19 @@ export default function AddInvestmentPage() {
             </div>
           )}
 
-          {/* 월 투자액 입력 */}
-          <input
-            type="text"
-            value={monthlyAmount}
-            onChange={(e) => handleNumericInput(e, setMonthlyAmount)}
-            placeholder="10만원씩"
-            className="w-full bg-white rounded-2xl p-5 text-coolgray-900 placeholder-coolgray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
-          />
+          {/* 월 투자액 입력 (만원 단위) */}
+          <div className="relative">
+            <input
+              type="text"
+              value={monthlyAmount}
+              onChange={handleAmountChange}
+              placeholder="월 100 (만원 단위)"
+              className="w-full bg-white rounded-2xl p-5 pr-16 text-coolgray-900 placeholder-coolgray-400 focus:outline-none focus:ring-2 focus:ring-brand-500"
+            />
+            <span className="absolute right-5 top-1/2 -translate-y-1/2 text-coolgray-500 font-medium">
+              만원
+            </span>
+          </div>
 
           {/* 투자 기간 입력 */}
           <input
