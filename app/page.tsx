@@ -3,11 +3,21 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/utils/supabase/client'
-import { IconPlus, IconLogout, IconUser, IconLoader2 } from '@tabler/icons-react'
+import { IconPlus, IconLogout, IconUser, IconLoader2, IconTrash } from '@tabler/icons-react'
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { formatCurrency } from '@/lib/utils'
 import { sendGAEvent } from '@next/third-parties/google'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
 
 interface Record {
   id: string
@@ -26,6 +36,9 @@ export default function Home() {
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
   const [selectedYear, setSelectedYear] = useState<number>(1) // 기본값: 1년
+  const [deleteTargetId, setDeleteTargetId] = useState<string | null>(null) // 삭제 대상 ID
+  const [isDeleting, setIsDeleting] = useState(false) // 삭제 중 상태
+  const [activeItemId, setActiveItemId] = useState<string | null>(null) // 슬라이딩 활성화된 아이템 ID
 
   const supabase = createClient()
 
@@ -156,6 +169,36 @@ export default function Home() {
     } catch (error) {
       console.error('로그아웃 오류:', error)
       setIsLoggingOut(false)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!deleteTargetId) return
+
+    try {
+      setIsDeleting(true)
+
+      // Supabase에서 삭제
+      const { error } = await supabase
+        .from('records')
+        .delete()
+        .eq('id', deleteTargetId)
+
+      if (error) throw error
+
+      // Optimistic UI 업데이트: 삭제된 항목을 로컬 state에서 제거
+      setRecords(prevRecords => prevRecords.filter(record => record.id !== deleteTargetId))
+
+      // Google Analytics 이벤트 전송 (선택사항)
+      sendGAEvent({ event: 'delete_investment', value: deleteTargetId })
+
+    } catch (error) {
+      console.error('삭제 오류:', error)
+      alert('삭제 중 오류가 발생했습니다.')
+    } finally {
+      setIsDeleting(false)
+      setDeleteTargetId(null) // 모달 닫기
+      setActiveItemId(null) // 슬라이드 닫기
     }
   }
 
@@ -317,7 +360,7 @@ export default function Home() {
               <h2 className="text-lg font-bold text-coolgray-900 mb-4">
                 내 투자 목록
               </h2>
-              <div className="space-y-1">
+              <div>
                 {records.map((item) => {
                   // 각 투자의 만기 시점 미래 가치 계산 (T = P, 즉 만기 기준)
                   const R = item.annual_rate ? item.annual_rate / 100 : 0.10
@@ -337,31 +380,59 @@ export default function Home() {
                   return (
                     <div
                       key={item.id}
-                      className="flex items-start gap-2 py-4 px-2 border-b border-coolgray-100 last:border-b-0 w-full"
+                      className="relative overflow-hidden border-b border-coolgray-100 last:border-b-0"
                     >
-                      {/* 좌측: 종목명 (줄어듦) */}
-                      <div className="flex-1 min-w-0 flex flex-col">
-                        {/* 종목명 - 1줄만, truncate */}
-                        <h3 className="text-lg font-bold text-coolgray-900 mb-1 truncate">
-                          {item.title}
-                        </h3>
-                        {/* 상세 정보 */}
-                        <p className="text-sm text-coolgray-500">
-                          월 {formatCurrency(item.monthly_amount)} · {item.period_years}년
-                        </p>
+                      {/* 메인 컨텐츠 (슬라이딩되는 부분) */}
+                      <div
+                        onClick={() => {
+                          // 클릭 시 슬라이드 토글
+                          if (activeItemId === item.id) {
+                            setActiveItemId(null) // 이미 활성화된 아이템이면 닫기
+                          } else {
+                            setActiveItemId(item.id) // 다른 아이템이면 열기
+                          }
+                        }}
+                        className={`flex items-start gap-2 py-4 px-2 w-full cursor-pointer transition-all duration-300 ease-in-out bg-white hover:bg-gray-50 active:bg-gray-100 relative z-10 ${
+                          activeItemId === item.id ? '-translate-x-[60px]' : 'translate-x-0'
+                        }`}
+                      >
+                        {/* 좌측: 종목명 (줄어듦) */}
+                        <div className="flex-1 min-w-0 flex flex-col">
+                          {/* 종목명 - 1줄만, truncate */}
+                          <h3 className="text-lg font-bold text-coolgray-900 mb-1 truncate">
+                            {item.title}
+                          </h3>
+                          {/* 상세 정보 */}
+                          <p className="text-sm text-coolgray-500">
+                            월 {formatCurrency(item.monthly_amount)} · {item.period_years}년
+                          </p>
+                        </div>
+                        
+                        {/* 우측: 금액 (버팀) */}
+                        <div className="flex-shrink-0 flex flex-col items-end">
+                          {/* 최종 예상 금액 - 절대 줄바꿈 없음 */}
+                          <span className="text-xl font-bold text-coolgray-900 mb-1 whitespace-nowrap">
+                            {formatCurrency(calculatedFutureValue)}
+                          </span>
+                          {/* 수익금 배지 - 절대 줄바꿈 없음 */}
+                          <span className="bg-[#E0F8E8] text-green-600 rounded-full px-3 py-0.5 text-sm font-medium whitespace-nowrap">
+                            + {formatCurrency(calculatedProfit)}
+                          </span>
+                        </div>
                       </div>
-                      
-                      {/* 우측: 금액 (버팀) */}
-                      <div className="flex-shrink-0 flex flex-col items-end">
-                        {/* 최종 예상 금액 - 절대 줄바꿈 없음 */}
-                        <span className="text-xl font-bold text-coolgray-900 mb-1 whitespace-nowrap">
-                          {formatCurrency(calculatedFutureValue)}
-                        </span>
-                        {/* 수익금 배지 - 절대 줄바꿈 없음 */}
-                        <span className="bg-[#E0F8E8] text-green-600 rounded-full px-3 py-0.5 text-sm font-medium whitespace-nowrap">
-                          + {formatCurrency(calculatedProfit)}
-                        </span>
-                      </div>
+
+                      {/* 삭제 버튼 (absolute로 우측 끝에 고정) */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation() // 아이템 클릭 이벤트 차단
+                          setDeleteTargetId(item.id)
+                          setActiveItemId(null) // 삭제 모달 열릴 때 슬라이드 닫기
+                        }}
+                        className="absolute right-0 top-0 h-full w-[60px] bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-red-500 transition-all z-0"
+                        aria-label="삭제"
+                      >
+                        <IconTrash className="w-5 h-5" />
+                      </button>
                     </div>
                   )
                 })}
@@ -386,6 +457,36 @@ export default function Home() {
             </div>
           )}
       </div>
+
+      {/* 삭제 확인 AlertDialog */}
+      <AlertDialog 
+        open={!!deleteTargetId} 
+        onOpenChange={(open) => {
+          if (!open) {
+            setDeleteTargetId(null)
+            setActiveItemId(null) // 모달 닫힐 때 슬라이드도 닫기
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>정말 삭제하시겠습니까?</AlertDialogTitle>
+            <AlertDialogDescription>
+              삭제된 투자 기록은 복구할 수 없습니다.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDelete}
+              disabled={isDeleting}
+              className="bg-red-500 hover:bg-red-600 focus:ring-red-500"
+            >
+              {isDeleting ? '삭제 중...' : '삭제'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </main>
   )
 }
