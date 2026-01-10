@@ -7,12 +7,14 @@ import { IconPlus, IconLogout, IconUser, IconLoader2 } from '@tabler/icons-react
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { formatCurrency } from '@/lib/utils'
 import { sendGAEvent } from '@next/third-parties/google'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 
 interface Record {
   id: string
   title: string
   monthly_amount: number
   period_years: number
+  annual_rate: number
   expected_amount: string
   created_at: string
 }
@@ -23,48 +25,65 @@ export default function Home() {
   const [records, setRecords] = useState<Record[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [selectedYear, setSelectedYear] = useState<number>(1) // 기본값: 1년
 
   const supabase = createClient()
 
-  // 복리 계산 헬퍼 함수: 월 적립액을 N년 동안 연이율 10%로 굴린 총액
-  const calculateCompoundValue = (monthlyAmount: number, years: number): number => {
-    const annualRate = 0.10 // 연이율 10%
-    const monthlyRate = annualRate / 12 // 월이율
-    const totalMonths = years * 12 // 총 개월 수
+  // 시뮬레이션 기반 복리 계산 헬퍼 함수
+  // T: 사용자가 선택한 연도, P: 투자 만기, R: 연이율
+  const calculateSimulatedValue = (
+    monthlyAmount: number, 
+    T: number, 
+    P: number, 
+    R: number = 0.10
+  ): number => {
+    // Case A: 선택 시점이 만기보다 짧거나 같음 (T <= P)
+    if (T <= P) {
+      const monthlyRate = R / 12
+      const totalMonths = T * 12
+      const futureValue = monthlyAmount * ((Math.pow(1 + monthlyRate, totalMonths) - 1) / monthlyRate)
+      return futureValue
+    }
     
-    // 복리 공식: FV = PMT × [(1 + r)^n - 1] / r
-    const futureValue = monthlyAmount * ((Math.pow(1 + monthlyRate, totalMonths) - 1) / monthlyRate)
+    // Case B: 선택 시점이 만기보다 김 (T > P)
+    // Step 1: P년(만기)까지 복리로 불어남
+    const monthlyRate = R / 12
+    const maturityMonths = P * 12
+    const maturityValue = monthlyAmount * ((Math.pow(1 + monthlyRate, maturityMonths) - 1) / monthlyRate)
     
-    return futureValue
+    // Step 2: 만기 이후는 이자 없이 현금으로 보유 (T - P년 동안)
+    // 만기 시점의 총액이 그대로 T년 시점의 자산
+    return maturityValue
   }
 
-  // N년 기준 자산 계산
-  const { minYear, totalExpectedAsset, monthlyEffectiveAmount } = useMemo(() => {
+  // 선택된 연도 기준 자산 계산
+  const { totalExpectedAsset, totalMonthlyPayment } = useMemo(() => {
     if (records.length === 0) {
       return {
-        minYear: 3,
         totalExpectedAsset: 0,
-        monthlyEffectiveAmount: 0
+        totalMonthlyPayment: 0
       }
     }
 
-    // 1. 가장 짧은 투자 기간 찾기
-    const minYear = Math.min(...records.map(r => r.period_years))
-
-    // 2. 모든 투자를 minYear 기준으로 재계산하여 합산
+    // 모든 투자를 selectedYear(T) 기준으로 시뮬레이션하여 합산
     const totalExpectedAsset = records.reduce((sum, record) => {
-      return sum + calculateCompoundValue(record.monthly_amount, minYear)
+      const T = selectedYear // 사용자 선택 연도
+      const P = record.period_years // 투자 만기
+      const R = record.annual_rate ? record.annual_rate / 100 : 0.10 // 연이율 (기본 10%)
+      
+      return sum + calculateSimulatedValue(record.monthly_amount, T, P, R)
     }, 0)
 
-    // 3. 매월 실제로 불어나는 금액 (이자 포함)
-    const monthlyEffectiveAmount = totalExpectedAsset / (minYear * 12)
+    // 실제 매월 납입하는 총액 (모든 투자의 월 납입액 합계)
+    const totalMonthlyPayment = records.reduce((sum, record) => {
+      return sum + record.monthly_amount
+    }, 0)
 
     return {
-      minYear,
       totalExpectedAsset,
-      monthlyEffectiveAmount
+      totalMonthlyPayment
     }
-  }, [records])
+  }, [records, selectedYear])
 
   useEffect(() => {
     // 인증 상태 확인 및 데이터 로드
@@ -239,9 +258,24 @@ export default function Home() {
             나의 자산 예측
           </h2>
           <div className="space-y-6">
-            {/* Header */}
-            <div className="text-coolgray-700 text-lg font-medium">
-              {minYear}년 뒤 예상 자산
+            {/* Header with Year Selector */}
+            <div className="flex items-center gap-2 text-coolgray-700 text-lg font-medium">
+              <Select
+                value={selectedYear.toString()}
+                onValueChange={(value) => setSelectedYear(parseInt(value))}
+              >
+                <SelectTrigger className="w-[120px] h-10 border-2 border-brand-200 bg-white hover:border-brand-400 transition-colors">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="1">1년 뒤</SelectItem>
+                  <SelectItem value="3">3년 뒤</SelectItem>
+                  <SelectItem value="5">5년 뒤</SelectItem>
+                  <SelectItem value="10">10년 뒤</SelectItem>
+                  <SelectItem value="30">30년 뒤</SelectItem>
+                </SelectContent>
+              </Select>
+              <span>예상 자산</span>
             </div>
             
             {/* Main */}
@@ -256,7 +290,7 @@ export default function Home() {
               매월{' '}
               <span className="text-brand-600 font-semibold">
                 {user && records.length > 0
-                  ? formatCurrency(monthlyEffectiveAmount)
+                  ? formatCurrency(totalMonthlyPayment)
                   : '0만원'}
               </span>
               씩 모으고 있어요
@@ -285,8 +319,14 @@ export default function Home() {
               </h2>
               <div className="space-y-1">
                 {records.map((item) => {
-                  // 실시간 미래 가치 계산 (복리 적용)
-                  const calculatedFutureValue = calculateCompoundValue(item.monthly_amount, item.period_years)
+                  // 각 투자의 만기 시점 미래 가치 계산 (T = P, 즉 만기 기준)
+                  const R = item.annual_rate ? item.annual_rate / 100 : 0.10
+                  const calculatedFutureValue = calculateSimulatedValue(
+                    item.monthly_amount, 
+                    item.period_years, // T = P (만기 시점)
+                    item.period_years, // P (만기)
+                    R
+                  )
                   
                   // 총 원금 계산
                   const totalPrincipal = item.monthly_amount * 12 * item.period_years
