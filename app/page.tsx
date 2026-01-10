@@ -7,17 +7,6 @@ import { IconPlus, IconLogout, IconUser, IconLoader2, IconTrash } from '@tabler/
 import type { User as SupabaseUser } from '@supabase/supabase-js'
 import { formatCurrency } from '@/lib/utils'
 import { sendGAEvent } from '@next/third-parties/google'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog'
 
 interface Record {
   id: string
@@ -303,21 +292,17 @@ export default function Home() {
           <div className="space-y-6">
             {/* Header with Year Selector */}
             <div className="flex items-center gap-2 text-coolgray-700 text-lg font-medium">
-              <Select
+              <select
                 value={selectedYear.toString()}
-                onValueChange={(value) => setSelectedYear(parseInt(value))}
+                onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+                className="w-[120px] h-10 border-2 border-brand-200 bg-white hover:border-brand-400 transition-colors rounded-md px-3 text-coolgray-900 focus:outline-none focus:ring-2 focus:ring-brand-500"
               >
-                <SelectTrigger className="w-[120px] h-10 border-2 border-brand-200 bg-white hover:border-brand-400 transition-colors">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="1">1년 뒤</SelectItem>
-                  <SelectItem value="3">3년 뒤</SelectItem>
-                  <SelectItem value="5">5년 뒤</SelectItem>
-                  <SelectItem value="10">10년 뒤</SelectItem>
-                  <SelectItem value="30">30년 뒤</SelectItem>
-                </SelectContent>
-              </Select>
+                <option value="1">1년 뒤</option>
+                <option value="3">3년 뒤</option>
+                <option value="5">5년 뒤</option>
+                <option value="10">10년 뒤</option>
+                <option value="30">30년 뒤</option>
+              </select>
               <span>예상 자산</span>
             </div>
             
@@ -458,35 +443,55 @@ export default function Home() {
           )}
       </div>
 
-      {/* 삭제 확인 AlertDialog */}
-      <AlertDialog 
-        open={!!deleteTargetId} 
-        onOpenChange={(open) => {
-          if (!open) {
-            setDeleteTargetId(null)
-            setActiveItemId(null) // 모달 닫힐 때 슬라이드도 닫기
-          }
-        }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>정말 삭제하시겠습니까?</AlertDialogTitle>
-            <AlertDialogDescription>
-              삭제된 투자 기록은 복구할 수 없습니다.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isDeleting}>취소</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleDelete}
-              disabled={isDeleting}
-              className="bg-red-500 hover:bg-red-600 focus:ring-red-500"
-            >
-              {isDeleting ? '삭제 중...' : '삭제'}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      {/* 삭제 확인 모달 */}
+      {deleteTargetId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* 오버레이 */}
+          <div 
+            className="fixed inset-0 bg-black/50 animate-in fade-in-0"
+            onClick={() => {
+              if (!isDeleting) {
+                setDeleteTargetId(null)
+                setActiveItemId(null)
+              }
+            }}
+          />
+          
+          {/* 모달 컨텐츠 */}
+          <div className="relative z-50 w-full max-w-md mx-4 bg-white rounded-lg shadow-lg border p-6 animate-in fade-in-0 zoom-in-95">
+            {/* 헤더 */}
+            <div className="mb-4">
+              <h2 className="text-lg font-bold text-coolgray-900 mb-2">
+                정말 삭제하시겠습니까?
+              </h2>
+              <p className="text-sm text-gray-500">
+                삭제된 투자 기록은 복구할 수 없습니다.
+              </p>
+            </div>
+
+            {/* 버튼 영역 */}
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => {
+                  setDeleteTargetId(null)
+                  setActiveItemId(null)
+                }}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-coolgray-700 bg-coolgray-100 rounded-md hover:bg-coolgray-200 transition-colors disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                onClick={handleDelete}
+                disabled={isDeleting}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-500 rounded-md hover:bg-red-600 transition-colors disabled:opacity-50"
+              >
+                {isDeleting ? '삭제 중...' : '삭제'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
